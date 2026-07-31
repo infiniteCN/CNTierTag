@@ -1,0 +1,22 @@
+name: CNTierTag
+version: '${project.version}'
+main: win.cntier.tag.CnTierTagPlugin
+api-version: '1.21'
+author: Larkdream
+description: 把 CN Tierlist 段位直接挂到头顶和 Tab，顺手提供占位符
+website: https://cntier.win
+softdepend:
+  - PlaceholderAPI
+commands:
+  cntier:
+    description: 查 CNTier 段位，顺手管一下缓存
+    usage: /cntier [玩家|refresh|reload|clear]
+    aliases:
+      - ctier
+permissions:
+  cntier.use:
+    description: 可以查询 CNTier 段位
+    default: true
+  cntier.admin:
+    description: 可以刷新、重载和清空 CNTierTag 缓存
+    default: op

@@ -1,0 +1,109 @@
+# 默认跟 CnTierTagger 一样拉匿名总榜，不填 Key 也能直接显示。
+api:
+  base-url: "https://cntier.win"
+  # 可选。匿名总榜抽风或没找到玩家时，填了才会拿旧版单玩家接口补查。
+  key: ""
+  timeout-seconds: 8
+# 真要配备用 Key，也能用 CNTIER_API_KEY 环境变量盖过上面的 key。
+
+cache:
+  # 整份总榜全服共用这份缓存，别让每个玩家都扛着 660KB 榜单回家。
+  success-seconds: 300
+  not-found-seconds: 60
+  failure-seconds: 20
+
+# 默认直接挂到玩家头顶和 Tab，不需要再配任何占位符。
+direct-display:
+  enabled: true
+  nametag: true
+  tab-list: true
+  # 每 2 秒同步一次，既能接住接口回包，也能补上刚进观察范围的玩家。
+  refresh-ticks: 40
+
+# 参考 CnTierTagger 做了三种选段规则：
+# selected_only：只看 default-mode；highest_only：只看最高段位；
+# mixed：default-mode 有段位就用它，没有再退回最高段位。
+# default-mode 填 best 时，三种规则都会直接挑最高段位。
+default-mode: "best"
+display-rule: "mixed"
+
+formats:
+  # 可用变量：<tier> <tier_color> <icon> <retired> <retired_color>
+  # 还有 <mode> <mode_name> <mode_icon> <mode_color>。
+  # head 是玩家头顶 Text Display 的称号部分，插件会在后面接上灰色竖线和玩家名。
+  head: "<mode_color><mode_icon> <tier_color><retired><tier>"
+  # tag 用在 Tab 和占位符里：模式色图标 + 段位 + 灰色竖线 + 玩家名。
+  tag: "<mode_color><mode_icon> <tier_color><retired><tier> &7| &r"
+  formatted: "<mode_color><mode_icon> <tier_color><retired><tier> &7|&r"
+  tier: "<retired_color><retired><tier_color><tier>&r"
+  peak: "<tier_color><tier>&r"
+  loading: ""
+  unranked: ""
+  error: ""
+  no-api-key: ""
+
+retired:
+  marker: "(R) "
+  color: "#A2D6FF"
+  icon: ""
+
+# PvPCore 就是直接用这些原生 Unicode 图标，不发材质包，也不占私用字形。
+modes:
+  axe:
+    color: "#55FF55"
+    icon: "🪓"
+  sword:
+    color: "#A4FDF0"
+    icon: "🗡"
+  buhc:
+    color: "#FF5555"
+    icon: "❤"
+  vanilla:
+    color: "#FF55FF"
+    icon: "✦"
+  npot:
+    color: "#7D4A40"
+    icon: "☠"
+  potion:
+    color: "#FF0000"
+    icon: "⚗"
+  smp:
+    color: "#ECCB45"
+    icon: "🛡"
+  mace:
+    color: "#AAAAAA"
+    icon: "🔨"
+
+tiers:
+  HT1:
+    color: "#E8BA3A"
+    icon: ""
+  LT1:
+    color: "#D5B355"
+    icon: ""
+  HT2:
+    color: "#C4D3E7"
+    icon: ""
+  LT2:
+    color: "#A0A7B2"
+    icon: ""
+  HT3:
+    color: "#F89F5A"
+    icon: ""
+  LT3:
+    color: "#C67B42"
+    icon: ""
+  HT4:
+    color: "#81749A"
+    icon: ""
+  LT4:
+    color: "#655B79"
+    icon: ""
+  HT5:
+    color: "#8F82A8"
+    icon: ""
+  LT5:
+    color: "#655B79"
+    icon: ""
+
+debug: false
