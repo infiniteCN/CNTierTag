@@ -3,7 +3,8 @@ api:
   base-url: "https://cntier.win"
   # 可选。匿名总榜抽风或没找到玩家时，填了才会拿旧版单玩家接口补查。
   key: ""
-  timeout-seconds: 8
+  # 总榜约 750 KB；跨境线路偶尔会超过 8 秒，给完整响应留出余量。
+  timeout-seconds: 15
 # 真要配备用 Key，也能用 CNTIER_API_KEY 环境变量盖过上面的 key。
 
 cache:

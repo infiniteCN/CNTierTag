@@ -9,12 +9,14 @@ import org.junit.jupiter.api.Test;
 import win.cntier.tag.api.model.ProfileStatus;
 import win.cntier.tag.internal.config.PluginSettings;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.zip.GZIPOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -27,6 +29,7 @@ class CnTierHttpClientTest {
     private HttpServer server;
     private AtomicInteger rankingRequests;
     private volatile String receivedApiKey;
+    private volatile String receivedAcceptEncoding;
 
     @BeforeEach
     void setUp() throws IOException {
@@ -53,6 +56,7 @@ class CnTierHttpClientTest {
         assertEquals(ProfileStatus.AVAILABLE, second.status(), second.detail());
         assertEquals(1, rankingRequests.get());
         assertNull(receivedApiKey);
+        assertEquals("gzip", receivedAcceptEncoding);
     }
 
     @Test
@@ -80,13 +84,20 @@ class CnTierHttpClientTest {
     private void serveRanking(HttpExchange exchange) throws IOException {
         rankingRequests.incrementAndGet();
         receivedApiKey = exchange.getRequestHeaders().getFirst("X-Api-Key");
-        byte[] body = ("""
+        receivedAcceptEncoding = exchange.getRequestHeaders().getFirst("Accept-Encoding");
+        byte[] plainBody = ("""
             [
               {"uuid":"%s","name":"Axelili","region":"华东","modeTiers":{"Sword":"HT3"}},
               {"uuid":"%s","name":"PeakPlayer","region":"华南","modeTiers":{"NPOT":"Peak HT3|LT3"}}
             ]
             """.formatted(FIRST, SECOND)).getBytes(StandardCharsets.UTF_8);
+        ByteArrayOutputStream compressed = new ByteArrayOutputStream();
+        try (GZIPOutputStream gzip = new GZIPOutputStream(compressed)) {
+            gzip.write(plainBody);
+        }
+        byte[] body = compressed.toByteArray();
         exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
+        exchange.getResponseHeaders().set("Content-Encoding", "gzip");
         exchange.sendResponseHeaders(200, body.length);
         exchange.getResponseBody().write(body);
         exchange.close();

@@ -4,6 +4,8 @@ import win.cntier.tag.api.model.ProfileResult;
 import win.cntier.tag.api.model.ProfileStatus;
 import win.cntier.tag.internal.config.PluginSettings;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -12,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.zip.GZIPInputStream;
 
 public final class CnTierHttpClient {
 
@@ -84,6 +87,7 @@ public final class CnTierHttpClient {
                     .uri(URI.create(endpoint))
                     .timeout(settings.requestTimeout())
                     .header("Accept", "application/json")
+                    .header("Accept-Encoding", "gzip")
                     .header("User-Agent", "CNTierTag/1.0.0")
                     .GET()
                     .build();
@@ -96,7 +100,7 @@ public final class CnTierHttpClient {
 
             HttpClient requestClient = client;
             CompletableFuture<RankingLoadResult> future = requestClient
-                .sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+                .sendAsync(request, HttpResponse.BodyHandlers.ofByteArray())
                 .thenApply(this::mapRankingResponse)
                 .exceptionally(throwable -> RankingLoadResult.failed(
                     ProfileStatus.ERROR,
@@ -138,7 +142,7 @@ public final class CnTierHttpClient {
             ));
     }
 
-    private RankingLoadResult mapRankingResponse(HttpResponse<String> response) {
+    private RankingLoadResult mapRankingResponse(HttpResponse<byte[]> response) {
         int status = response.statusCode();
         if (status == 429) {
             return RankingLoadResult.failed(ProfileStatus.RATE_LIMITED, "CNTier 让咱查慢点，先缓缓");
@@ -151,7 +155,7 @@ public final class CnTierHttpClient {
         }
 
         try {
-            return RankingLoadResult.available(OverallRankingParser.parse(response.body()));
+            return RankingLoadResult.available(OverallRankingParser.parse(responseBody(response)));
         } catch (RuntimeException exception) {
             return RankingLoadResult.failed(ProfileStatus.ERROR, "匿名总榜 JSON 没看懂：" + usefulMessage(exception));
         }
@@ -165,6 +169,7 @@ public final class CnTierHttpClient {
                 .uri(URI.create(settings.apiBaseUrl() + "/api/v1/player/" + uuid))
                 .timeout(settings.requestTimeout())
                 .header("Accept", "application/json")
+                .header("Accept-Encoding", "gzip")
                 .header("X-Api-Key", settings.apiKey())
                 .header("User-Agent", "CNTierTag/1.0.0")
                 .GET()
@@ -175,7 +180,7 @@ public final class CnTierHttpClient {
             );
         }
 
-        return client.sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+        return client.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray())
             .thenApply(response -> mapResponse(uuid, response))
             .exceptionally(throwable -> ProfileResult.of(
                 ProfileStatus.ERROR,
@@ -183,7 +188,7 @@ public final class CnTierHttpClient {
             ));
     }
 
-    private ProfileResult mapResponse(UUID expectedUuid, HttpResponse<String> response) {
+    private ProfileResult mapResponse(UUID expectedUuid, HttpResponse<byte[]> response) {
         int status = response.statusCode();
         if (status == 404) {
             return ProfileResult.of(ProfileStatus.NOT_FOUND, "CNTier 里没这个 UUID");
@@ -199,7 +204,7 @@ public final class CnTierHttpClient {
         }
 
         try {
-            var profile = ProfileParser.parse(response.body());
+            var profile = ProfileParser.parse(responseBody(response));
             if (!profile.uuid().equals(expectedUuid)) {
                 return ProfileResult.of(ProfileStatus.ERROR, "接口回来的 UUID 对不上，怪吓人的，先不用这份数据");
             }
@@ -207,6 +212,19 @@ public final class CnTierHttpClient {
         } catch (RuntimeException exception) {
             return ProfileResult.of(ProfileStatus.ERROR, "接口 JSON 没看懂：" + usefulMessage(exception));
         }
+    }
+
+    private static String responseBody(HttpResponse<byte[]> response) {
+        byte[] body = response.body();
+        String encoding = response.headers().firstValue("Content-Encoding").orElse("");
+        if (encoding.toLowerCase().contains("gzip")) {
+            try (GZIPInputStream input = new GZIPInputStream(new ByteArrayInputStream(body))) {
+                body = input.readAllBytes();
+            } catch (IOException exception) {
+                throw new IllegalArgumentException("gzip 响应解压失败", exception);
+            }
+        }
+        return new String(body, StandardCharsets.UTF_8);
     }
 
     private static String usefulMessage(Throwable throwable) {
