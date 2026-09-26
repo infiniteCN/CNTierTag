@@ -11,11 +11,13 @@ import win.cntier.tag.internal.format.TierFormatter;
 import win.cntier.tag.internal.http.CnTierHttpClient;
 
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 public final class TierService implements CnTierApi {
 
@@ -23,8 +25,9 @@ public final class TierService implements CnTierApi {
     private final CnTierHttpClient httpClient;
     private final TierFormatter formatter;
     private final Map<UUID, CacheEntry> cache = new ConcurrentHashMap<>();
-    private final Map<UUID, CompletableFuture<ProfileResult>> inFlight = new ConcurrentHashMap<>();
+    private final Map<FetchKey, CompletableFuture<ProfileResult>> inFlight = new ConcurrentHashMap<>();
     private final Map<String, Long> lastLogAt = new ConcurrentHashMap<>();
+    private final AtomicLong cacheGeneration = new AtomicLong();
     private volatile PluginSettings settings;
 
     public TierService(
@@ -43,6 +46,8 @@ public final class TierService implements CnTierApi {
         this.settings = newSettings;
         this.httpClient.reload(newSettings);
         this.formatter.reload(newSettings);
+        cacheGeneration.incrementAndGet();
+        inFlight.clear();
         cache.entrySet().removeIf(entry ->
             entry.getValue().result().status() != ProfileStatus.AVAILABLE
         );
@@ -78,16 +83,25 @@ public final class TierService implements CnTierApi {
             return CompletableFuture.completedFuture(existing.result());
         }
 
-        return inFlight.computeIfAbsent(playerUuid, uuid -> {
+        FetchKey fetchKey = new FetchKey(
+            playerUuid,
+            normalizePlayerName(playerName),
+            forceRefresh
+        );
+        long requestGeneration = cacheGeneration.get();
+        return inFlight.computeIfAbsent(fetchKey, ignored -> {
             PluginSettings requestSettings = settings;
             CompletableFuture<ProfileResult> future = httpClient.fetch(
-                    uuid,
+                    playerUuid,
                     playerName,
                     requestSettings,
                     forceRefresh
                 )
-                .thenApply(result -> cacheResult(uuid, result, requestSettings));
-            future.whenComplete((result, throwable) -> inFlight.remove(uuid, future));
+                .thenApply(result -> requestGeneration == cacheGeneration.get()
+                    ? cacheResult(playerUuid, result, requestSettings)
+                    : result
+                );
+            future.whenComplete((result, throwable) -> inFlight.remove(fetchKey, future));
             return future;
         });
     }
@@ -97,7 +111,7 @@ public final class TierService implements CnTierApi {
         if (result.status() == ProfileStatus.AVAILABLE) {
             cache.put(uuid, entry(result, requestSettings.successTtl()));
             if (requestSettings.debug()) {
-                plugin.getLogger().info("刚把 " + uuid + " 的 CNTier 数据捞回来了，缓存里有货了");
+                plugin.getLogger().info("[Cache] 已更新玩家数据：uuid=" + uuid);
             }
             return result;
         }
@@ -119,15 +133,22 @@ public final class TierService implements CnTierApi {
     private void logFailure(UUID uuid, ProfileResult result) {
         String key = result.status() + ":" + uuid;
         long now = System.currentTimeMillis();
+        lastLogAt.entrySet().removeIf(entry -> now - entry.getValue() >= 300_000L);
         Long previous = lastLogAt.put(key, now);
         if (previous != null && now - previous < 60_000L) {
             return;
         }
 
         if (result.status() == ProfileStatus.API_KEY_MISSING) {
-            plugin.getLogger().warning("CNTierTag 还没拿到 API Key，config.yml 或 CNTIER_API_KEY 里塞一个哈");
+            plugin.getLogger().warning(
+                "[Fetch] API Key 未配置：请设置 config.yml 的 api.key 或 CNTIER_API_KEY"
+            );
         } else {
-            plugin.getLogger().warning("查 " + uuid + " 的 CNTier 数据没整成：" + result.detail());
+            plugin.getLogger().warning(
+                "[Fetch] 玩家数据查询失败：uuid=" + uuid
+                    + "，status=" + result.status()
+                    + "，detail=" + result.detail()
+            );
         }
     }
 
@@ -142,7 +163,10 @@ public final class TierService implements CnTierApi {
 
     @Override
     public void clearCache() {
+        cacheGeneration.incrementAndGet();
         cache.clear();
+        inFlight.clear();
+        lastLogAt.clear();
         httpClient.clearCache();
     }
 
@@ -155,13 +179,16 @@ public final class TierService implements CnTierApi {
         return cache.size();
     }
 
-    public boolean isFetching(UUID uuid) {
-        return inFlight.containsKey(uuid);
+    private static String normalizePlayerName(String playerName) {
+        return playerName == null ? "" : playerName.trim().toLowerCase(Locale.ROOT);
     }
 
     public record Snapshot(ProfileResult result, boolean fresh) {
     }
 
     private record CacheEntry(ProfileResult result, long expiresAtMillis) {
+    }
+
+    private record FetchKey(UUID uuid, String playerName, boolean forceRefresh) {
     }
 }

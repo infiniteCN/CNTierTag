@@ -17,7 +17,7 @@ class ProfileParserTest {
     private static final String UUID_TEXT = "d8d3a9e0-5f1e-4b0d-8245-0b5b8f7d8c5f";
 
     @Test
-    void 能吃下官方文档那种完整玩家对象() {
+    void 可以解析完整玩家对象() {
         var profile = ProfileParser.parse("""
             {
               "id": 1,
@@ -53,7 +53,7 @@ class ProfileParserTest {
     }
 
     @Test
-    void 巅峰段位坏掉时先退回当前段位() {
+    void 巅峰段位无效时回退到当前段位() {
         var profile = ProfileParser.parse("""
             {
               "uuid": "%s",
@@ -69,7 +69,7 @@ class ProfileParserTest {
     }
 
     @Test
-    void 重复模式只留更新时间更新的那条() {
+    void 重复模式保留更新时间较新的记录() {
         var profile = ProfileParser.parse("""
             {
               "uuid": "%s",
@@ -85,7 +85,7 @@ class ProfileParserTest {
     }
 
     @Test
-    void 不认识的模式和段位跳过就好() {
+    void 跳过未知模式和段位() {
         var profile = ProfileParser.parse("""
             {
               "uuid": "%s",
@@ -100,7 +100,7 @@ class ProfileParserTest {
     }
 
     @Test
-    void 连UUID都没有就别硬解析() {
+    void 缺少UUID或根节点类型错误时拒绝解析() {
         assertThrows(IllegalArgumentException.class, () ->
             ProfileParser.parse("{\"region\":\"华东\",\"tierRecords\":[]}")
         );

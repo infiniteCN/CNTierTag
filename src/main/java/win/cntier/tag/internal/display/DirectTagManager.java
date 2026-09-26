@@ -17,6 +17,7 @@ import org.bukkit.util.Transformation;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import win.cntier.tag.CnTierTagPlugin;
+import win.cntier.tag.api.model.ProfileResult;
 import win.cntier.tag.api.model.ProfileStatus;
 import win.cntier.tag.api.model.TierRecord;
 import win.cntier.tag.internal.config.DirectDisplaySettings;
@@ -24,8 +25,10 @@ import win.cntier.tag.internal.format.TierFormatter;
 import win.cntier.tag.internal.service.TierService;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 public final class DirectTagManager implements Listener {
@@ -33,14 +36,17 @@ public final class DirectTagManager implements Listener {
     private static final LegacyComponentSerializer LEGACY =
         LegacyComponentSerializer.legacySection();
     private static final float HEAD_TAG_Y = 0.55F;
+    private static final float HEAD_TAG_VIEW_RANGE = 0.5F;
 
     private final CnTierTagPlugin plugin;
     private final TierService service;
     private final TierFormatter formatter;
     private final Map<UUID, PlayerState> states = new HashMap<>();
     private final Map<UUID, Long> readyAfterMillis = new HashMap<>();
+    private final Map<UUID, Long> pendingQueries = new HashMap<>();
     private DirectDisplaySettings settings;
     private BukkitTask refreshTask;
+    private long queryGeneration;
 
     public DirectTagManager(
         CnTierTagPlugin plugin,
@@ -63,6 +69,8 @@ public final class DirectTagManager implements Listener {
 
     public void reload(DirectDisplaySettings newSettings) {
         this.settings = newSettings;
+        queryGeneration++;
+        pendingQueries.clear();
         reschedule();
         if (newSettings.enabled()) {
             Bukkit.getOnlinePlayers().forEach(this::syncPlayer);
@@ -72,6 +80,7 @@ public final class DirectTagManager implements Listener {
     }
 
     public void stop() {
+        queryGeneration++;
         cancelTask();
         clearAll();
     }
@@ -84,41 +93,82 @@ public final class DirectTagManager implements Listener {
         }
 
         UUID uuid = player.getUniqueId();
+        var cached = service.snapshot(uuid);
+        if (cached.isPresent()) {
+            TierService.Snapshot snapshot = cached.get();
+            applyResult(player, snapshot.result());
+            if (snapshot.fresh()) {
+                return;
+            }
+        }
+        long requestGeneration = queryGeneration;
+        if (pendingQueries.putIfAbsent(uuid, requestGeneration) != null) {
+            return;
+        }
+
         service.fetchProfile(uuid, player.getName(), false).whenComplete((result, throwable) -> {
-            if (throwable != null || !plugin.isEnabled()) {
+            if (!plugin.isEnabled()) {
                 return;
             }
             Bukkit.getScheduler().runTask(plugin, () -> {
+                if (!pendingQueries.remove(uuid, requestGeneration)
+                    || requestGeneration != queryGeneration) {
+                    return;
+                }
                 Player online = Bukkit.getPlayer(uuid);
                 if (online == null || !online.isOnline()) {
                     return;
                 }
-                var profile = result.status() == ProfileStatus.AVAILABLE
-                    ? result.optionalProfile()
-                    : service.getCachedProfile(uuid);
-                if (profile.isEmpty()) {
+                if (throwable != null) {
+                    plugin.getLogger().warning(
+                        "[Display] 玩家显示更新失败：uuid=" + uuid
+                            + "，reason=" + throwable.getClass().getSimpleName()
+                    );
                     clearPlayer(online);
                     return;
                 }
-                TierRecord record = formatter.displayRecord(profile.get()).orElse(null);
-                if (record == null) {
-                    clearPlayer(online);
-                    return;
-                }
-
-                String headTag = formatter.formatHeadTag(record);
-                String listTag = formatter.formatTag(record);
-                if (headTag.isBlank() || listTag.isBlank()) {
-                    clearPlayer(online);
-                    return;
-                }
-                applyTag(
-                    online,
-                    composeHeadText(LEGACY.deserialize(headTag), online.getName()),
-                    LEGACY.deserialize(listTag)
-                );
+                applyResult(online, result);
             });
         });
+    }
+
+    private void applyResult(Player player, ProfileResult result) {
+        DirectDisplaySettings current = settings;
+        if (!current.enabled() || (!current.nametag() && !current.tabList())) {
+            clearPlayer(player);
+            return;
+        }
+
+        var profile = result.status() == ProfileStatus.AVAILABLE
+            ? result.optionalProfile()
+            : service.getCachedProfile(player.getUniqueId());
+        if (profile.isEmpty()) {
+            clearPlayer(player);
+            return;
+        }
+
+        TierRecord record = formatter.displayRecord(profile.get()).orElse(null);
+        if (record == null) {
+            clearPlayer(player);
+            return;
+        }
+
+        Component headText = null;
+        if (current.nametag()) {
+            String formatted = formatter.formatHeadTag(record);
+            if (!formatted.isBlank()) {
+                headText = composeHeadText(LEGACY.deserialize(formatted), player.getName());
+            }
+        }
+
+        Component listText = null;
+        if (current.tabList()) {
+            String formatted = formatter.formatTag(record);
+            if (!formatted.isBlank()) {
+                listText = LEGACY.deserialize(formatted);
+            }
+        }
+        applyTag(player, current, headText, listText);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -136,7 +186,9 @@ public final class DirectTagManager implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {
-        readyAfterMillis.remove(event.getPlayer().getUniqueId());
+        UUID uuid = event.getPlayer().getUniqueId();
+        readyAfterMillis.remove(uuid);
+        pendingQueries.remove(uuid);
         clearPlayer(event.getPlayer());
     }
 
@@ -147,9 +199,12 @@ public final class DirectTagManager implements Listener {
         }
         refreshTask = Bukkit.getScheduler().runTaskTimer(
             plugin,
-            () -> Bukkit.getOnlinePlayers().stream()
-                .filter(this::isReady)
-                .forEach(this::syncPlayer),
+            () -> {
+                Bukkit.getOnlinePlayers().stream()
+                    .filter(this::isReady)
+                    .forEach(this::syncPlayer);
+                syncAllVisibility();
+            },
             1L,
             settings.refreshTicks()
         );
@@ -167,23 +222,31 @@ public final class DirectTagManager implements Listener {
         }
     }
 
-    private void applyTag(Player player, Component headTag, Component listTag) {
+    private void applyTag(
+        Player player,
+        DirectDisplaySettings current,
+        Component headTag,
+        Component listTag
+    ) {
         PlayerState state = states.computeIfAbsent(
             player.getUniqueId(),
             ignored -> PlayerState.capture(player)
         );
-        DirectDisplaySettings current = settings;
 
-        if (current.nametag()) {
+        if (current.nametag() && headTag != null) {
             applyNametag(player, state, headTag);
         } else {
             restoreNametag(state);
         }
 
-        if (current.tabList()) {
+        if (current.tabList() && listTag != null) {
             applyTabList(player, state, listTag);
         } else {
             restoreTabList(player, state);
+        }
+
+        if (state.headDisplay == null && state.lastAppliedListName == null) {
+            states.remove(player.getUniqueId(), state);
         }
     }
 
@@ -194,20 +257,36 @@ public final class DirectTagManager implements Listener {
         }
 
         TextDisplay display = state.headDisplay;
+        boolean visibilityChanged = false;
         if (display == null
             || !display.isValid()
             || !display.getWorld().equals(player.getWorld())) {
             restoreNametag(state);
             display = createHeadDisplay(player, tag);
             state.headDisplay = display;
+            visibilityChanged = display != null;
         } else if (!Objects.equals(display.text(), tag)) {
             display.text(tag);
         }
 
-        if (!player.getPassengers().contains(display)) {
-            player.addPassenger(display);
+        if (display == null) {
+            return;
         }
-        syncVisibility(player, display);
+        if (!player.getPassengers().contains(display)) {
+            if (!player.addPassenger(display)) {
+                plugin.getLogger().warning(
+                    "[Display] 无法挂载头顶称号：player=" + player.getName()
+                );
+                display.remove();
+                state.headDisplay = null;
+                state.visibleTo.clear();
+                return;
+            }
+            visibilityChanged = true;
+        }
+        if (visibilityChanged) {
+            syncVisibility(player, display, state);
+        }
     }
 
     static Component composeHeadText(Component tierTag, String playerName) {
@@ -234,7 +313,7 @@ public final class DirectTagManager implements Listener {
                 spawned.setDefaultBackground(true);
                 spawned.setAlignment(TextDisplay.TextAlignment.CENTER);
                 spawned.setLineWidth(200);
-                spawned.setViewRange(32.0F);
+                spawned.setViewRange(HEAD_TAG_VIEW_RANGE);
                 spawned.setTransformation(new Transformation(
                     new Vector3f(0.0F, HEAD_TAG_Y, 0.0F),
                     new Quaternionf(),
@@ -245,24 +324,42 @@ public final class DirectTagManager implements Listener {
         );
         if (!player.addPassenger(display)) {
             plugin.getLogger().warning(
-                player.getName() + " 的头顶称号挂不上去，先把这层清掉，免得留个孤魂野鬼"
+                "[Display] 无法创建头顶称号：player=" + player.getName()
             );
             display.remove();
+            return null;
         }
         return display;
     }
 
-    private void syncVisibility(Player target, TextDisplay display) {
+    private void syncAllVisibility() {
+        states.forEach((uuid, state) -> {
+            Player target = Bukkit.getPlayer(uuid);
+            TextDisplay display = state.headDisplay;
+            if (target != null && display != null && display.isValid()) {
+                syncVisibility(target, display, state);
+            }
+        });
+    }
+
+    private void syncVisibility(Player target, TextDisplay display, PlayerState state) {
+        Set<UUID> onlineViewers = new HashSet<>();
         for (Player viewer : Bukkit.getOnlinePlayers()) {
+            UUID viewerUuid = viewer.getUniqueId();
+            onlineViewers.add(viewerUuid);
             boolean visible = viewer.getWorld().equals(target.getWorld())
                 && !target.isInvisible()
                 && viewer.canSee(target);
-            if (visible) {
+            boolean wasVisible = state.visibleTo.contains(viewerUuid);
+            if (visible && !wasVisible) {
                 viewer.showEntity(plugin, display);
-            } else {
+                state.visibleTo.add(viewerUuid);
+            } else if (!visible && wasVisible) {
                 viewer.hideEntity(plugin, display);
+                state.visibleTo.remove(viewerUuid);
             }
         }
+        state.visibleTo.retainAll(onlineViewers);
     }
 
     private void applyTabList(Player player, PlayerState state, Component tag) {
@@ -293,6 +390,7 @@ public final class DirectTagManager implements Listener {
 
     private void clearAll() {
         readyAfterMillis.clear();
+        pendingQueries.clear();
         for (UUID uuid : states.keySet().toArray(UUID[]::new)) {
             PlayerState state = states.remove(uuid);
             if (state == null) {
@@ -309,6 +407,7 @@ public final class DirectTagManager implements Listener {
     private void restoreNametag(PlayerState state) {
         TextDisplay display = state.headDisplay;
         state.headDisplay = null;
+        state.visibleTo.clear();
         if (display != null) {
             if (display.getVehicle() != null) {
                 display.getVehicle().removePassenger(display);
@@ -330,6 +429,7 @@ public final class DirectTagManager implements Listener {
         private Component originalListName;
         private Component lastAppliedListName;
         private TextDisplay headDisplay;
+        private final Set<UUID> visibleTo = new HashSet<>();
 
         private PlayerState(Component originalListName) {
             this.originalListName = originalListName;

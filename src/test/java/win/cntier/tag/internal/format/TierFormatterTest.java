@@ -20,21 +20,21 @@ class TierFormatterTest {
     private final TierFormatter formatter = new TierFormatter(PluginSettings.defaults());
 
     @Test
-    void 退役标记和段位绑在一起不会丢() {
+    void 退役标记与当前段位同时输出() {
         TierRecord retired = record(GameMode.SWORD, true, TierLevel.LT2, TierLevel.HT1);
         assertEquals("(R) LT2", formatter.rawTier(retired));
         assertEquals("(R) LT2", LegacyColors.strip(formatter.formatTier(retired)));
     }
 
     @Test
-    void 正常段位不会平白多个退役标记() {
+    void 未退役段位不输出退役标记() {
         TierRecord active = record(GameMode.AXE, false, TierLevel.HT3, TierLevel.HT2);
         assertEquals("HT3", formatter.rawTier(active));
         assertFalse(formatter.formatTier(active).contains("(R)"));
     }
 
     @Test
-    void 最佳标签优先没退役的段位() {
+    void 最佳段位优先选择未退役记录() {
         TierRecord retiredHt1 = record(GameMode.SWORD, true, TierLevel.HT1, TierLevel.HT1);
         TierRecord activeLt3 = record(GameMode.AXE, false, TierLevel.LT3, TierLevel.HT3);
         PlayerProfile profile = profile(Map.of(
@@ -46,7 +46,7 @@ class TierFormatterTest {
     }
 
     @Test
-    void 都没退役时按真实段位强度选() {
+    void 未退役记录按段位强度选择() {
         TierRecord lt1 = record(GameMode.SMP, false, TierLevel.LT1, TierLevel.HT1);
         TierRecord ht2 = record(GameMode.MACE, false, TierLevel.HT2, TierLevel.HT2);
         PlayerProfile profile = profile(Map.of(
@@ -58,7 +58,7 @@ class TierFormatterTest {
     }
 
     @Test
-    void 十六进制颜色会变成Minecraft能认的格式() {
+    void 十六进制颜色转换为Minecraft传统格式() {
         String colored = formatter.formatTier(record(
             GameMode.SWORD,
             false,
@@ -70,7 +70,7 @@ class TierFormatterTest {
     }
 
     @Test
-    void 默认称号会把PvPCore原生图标顶在最前面() {
+    void 默认称号以模式图标开头() {
         String tag = formatter.formatTag(record(
             GameMode.SWORD,
             false,
@@ -84,7 +84,7 @@ class TierFormatterTest {
     }
 
     @Test
-    void 头顶TextDisplay不带多余竖线() {
+    void 头顶称号格式不包含分隔符() {
         String tag = formatter.formatHeadTag(record(
             GameMode.SWORD,
             false,
@@ -98,7 +98,7 @@ class TierFormatterTest {
     }
 
     @Test
-    void 退役称号照PvPCore把标记和段位染成同一种颜色() {
+    void 退役标记使用独立颜色() {
         String tag = formatter.formatTag(record(
             GameMode.AXE,
             true,
@@ -107,7 +107,7 @@ class TierFormatterTest {
         ));
 
         assertTrue(tag.startsWith("§x§5§5§F§F§5§5🪓 "));
-        assertTrue(tag.contains("§x§A§0§A§7§B§2(R) LT2 §7| §r"));
+        assertTrue(tag.contains("§x§A§2§D§6§F§F(R) §x§A§0§A§7§B§2LT2 §7| §r"));
     }
 
     private static TierRecord record(

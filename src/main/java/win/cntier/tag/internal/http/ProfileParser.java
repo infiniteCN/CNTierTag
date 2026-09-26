@@ -23,7 +23,7 @@ public final class ProfileParser {
     public static PlayerProfile parse(String body) {
         JsonElement root = JsonParser.parseString(body);
         if (!root.isJsonObject()) {
-            throw new IllegalArgumentException("接口回的不是玩家对象，这就很难评");
+            throw new IllegalArgumentException("玩家接口响应必须是对象");
         }
 
         JsonObject object = root.getAsJsonObject();
@@ -85,7 +85,7 @@ public final class ProfileParser {
     private static String requiredString(JsonObject object, String name) {
         String value = stringValue(object, name, "");
         if (value.isBlank()) {
-            throw new IllegalArgumentException("接口数据里连 " + name + " 都没了，没法认人");
+            throw new IllegalArgumentException("玩家接口响应缺少必填字段：" + name);
         }
         return value;
     }

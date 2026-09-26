@@ -48,18 +48,36 @@ public final class CnTierExpansion extends PlaceholderExpansion {
     public @NotNull List<String> getPlaceholders() {
         return List.of(
             "%cntier_tag%",
+            "%cntier_mode%",
+            "%cntier_mode_name%",
+            "%cntier_mode_icon%",
+            "%cntier_mode_color%",
             "%cntier_tag_<模式>%",
+            "%cntier_mode_icon_<模式>%",
+            "%cntier_mode_color_<模式>%",
             "%cntier_tier_<模式>%",
             "%cntier_tier_<模式>_raw%",
+            "%cntier_tier_<模式>_color%",
+            "%cntier_tier_<模式>_icon%",
             "%cntier_tier_<模式>_formatted%",
             "%cntier_peak_<模式>%",
             "%cntier_peak_<模式>_raw%",
+            "%cntier_peak_<模式>_color%",
             "%cntier_retired_<模式>%",
+            "%cntier_last_updated_<模式>%",
             "%cntier_best_tag%",
             "%cntier_best_tier%",
+            "%cntier_best_tier_raw%",
             "%cntier_best_mode%",
+            "%cntier_best_mode_name%",
+            "%cntier_best_mode_icon%",
+            "%cntier_best_mode_color%",
             "%cntier_region%",
-            "%cntier_blacklisted%"
+            "%cntier_blacklisted%",
+            "%cntier_blacklist_reason%",
+            "%cntier_blacklist_date%",
+            "%cntier_uuid%",
+            "%cntier_status%"
         );
     }
 

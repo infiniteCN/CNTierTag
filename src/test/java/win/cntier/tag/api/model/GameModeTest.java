@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class GameModeTest {
 
     @Test
-    void api里的八种模式都认得() {
+    void 可以解析八种API模式() {
         assertEquals(GameMode.AXE, GameMode.fromApi("Axe").orElseThrow());
         assertEquals(GameMode.SWORD, GameMode.fromApi("Sword").orElseThrow());
         assertEquals(GameMode.BUHC, GameMode.fromApi("BUHC").orElseThrow());
@@ -20,7 +20,7 @@ class GameModeTest {
     }
 
     @Test
-    void 常见旧叫法也能对上() {
+    void 可以解析常用模式别名() {
         assertEquals(GameMode.BUHC, GameMode.fromInput("uhc").orElseThrow());
         assertEquals(GameMode.POTION, GameMode.fromInput("pot").orElseThrow());
         assertEquals(GameMode.NPOT, GameMode.fromInput("nethop").orElseThrow());
@@ -29,7 +29,7 @@ class GameModeTest {
     }
 
     @Test
-    void 瞎写的模式不会硬猜() {
+    void 未知模式返回空结果() {
         assertTrue(GameMode.fromInput("bedwars").isEmpty());
         assertTrue(GameMode.fromApi(null).isEmpty());
     }

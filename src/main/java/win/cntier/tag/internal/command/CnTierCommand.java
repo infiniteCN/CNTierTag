@@ -21,6 +21,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.logging.Level;
 
 public final class CnTierCommand implements CommandExecutor, TabCompleter {
 
@@ -43,7 +44,7 @@ public final class CnTierCommand implements CommandExecutor, TabCompleter {
         @NotNull String[] args
     ) {
         if (!sender.hasPermission("cntier.use")) {
-            tell(sender, "&c这条命令你用不了嗷。");
+            tell(sender, "&c你没有使用这条命令的权限。");
             return true;
         }
 
@@ -63,14 +64,14 @@ public final class CnTierCommand implements CommandExecutor, TabCompleter {
         Target target;
         if (args.length == 0) {
             if (!(sender instanceof Player player)) {
-                tell(sender, "&c控制台得写玩家名或者 UUID，不然我猜谁啊。");
+                tell(sender, "&c控制台查询时需要提供在线玩家名或 UUID。");
                 return true;
             }
             target = new Target(player.getName(), player.getUniqueId());
         } else {
             target = findTarget(args[0]);
             if (target == null) {
-                tell(sender, "&c没找到这个在线玩家。离线玩家直接填 UUID 吧，名字没法凭空换成正版 UUID。");
+                tell(sender, "&c未找到该在线玩家。查询离线玩家时请填写 UUID。");
                 return true;
             }
         }
@@ -81,28 +82,28 @@ public final class CnTierCommand implements CommandExecutor, TabCompleter {
 
     private boolean reload(CommandSender sender) {
         if (!sender.hasPermission("cntier.admin")) {
-            tell(sender, "&c重载配置这活儿得管理员来。");
+            tell(sender, "&c你没有重载配置的权限。");
             return true;
         }
         plugin.reloadPluginConfig();
-        tell(sender, "&a配置重新读过了，接口、称号样式和缓存时间都生效了。");
+        tell(sender, "&a配置已重载，接口、显示样式和缓存设置已更新。");
         return true;
     }
 
     private boolean clear(CommandSender sender) {
         if (!sender.hasPermission("cntier.admin")) {
-            tell(sender, "&c清缓存这按钮不能随便拍哈。");
+            tell(sender, "&c你没有清空缓存的权限。");
             return true;
         }
         int oldSize = service.cacheSize();
         service.clearCache();
-        tell(sender, "&a缓存倒干净了，一共扔掉 &f" + oldSize + " &a条。");
+        tell(sender, "&a缓存已清空，共移除 &f" + oldSize + " &a条玩家数据。");
         return true;
     }
 
     private boolean refresh(CommandSender sender, String[] args) {
         if (!sender.hasPermission("cntier.admin")) {
-            tell(sender, "&c强刷接口得管理员来，省得有人把 API 查冒烟。");
+            tell(sender, "&c你没有强制刷新玩家数据的权限。");
             return true;
         }
 
@@ -116,7 +117,7 @@ public final class CnTierCommand implements CommandExecutor, TabCompleter {
         }
 
         if (target == null) {
-            tell(sender, "&c写个在线玩家名或者 UUID，例如：/cntier refresh Steve");
+            tell(sender, "&c请填写在线玩家名或 UUID，例如：/cntier refresh Steve");
             return true;
         }
         query(sender, target, true);
@@ -124,11 +125,16 @@ public final class CnTierCommand implements CommandExecutor, TabCompleter {
     }
 
     private void query(CommandSender sender, Target target, boolean force) {
-        tell(sender, "&7我去 CNTier 翻一下 &f" + target.name() + "&7，马上。");
+        tell(sender, "&7正在查询 &f" + target.name() + "&7 的 CNTier 数据。");
         service.fetchProfile(target.uuid(), target.name(), force).whenComplete((result, throwable) ->
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (throwable != null) {
-                    tell(sender, "&c查询线程摔了一跤：" + throwable.getMessage());
+                    plugin.getLogger().log(
+                        Level.WARNING,
+                        "[Command] 玩家查询任务异常：target=" + target.uuid(),
+                        throwable
+                    );
+                    tell(sender, "&c查询失败，请稍后重试。详细原因已写入服务器日志。");
                     return;
                 }
                 showResult(sender, target, result);
@@ -139,11 +145,11 @@ public final class CnTierCommand implements CommandExecutor, TabCompleter {
     private void showResult(CommandSender sender, Target target, ProfileResult result) {
         if (result.status() != ProfileStatus.AVAILABLE) {
             String message = switch (result.status()) {
-                case NOT_FOUND -> "&eCNTier 总榜里没收录这名玩家，标签只能先空着了。";
-                case API_KEY_MISSING -> "&cAPI Key 还是空的，去 config.yml 填，或者设置 CNTIER_API_KEY 环境变量。";
-                case UNAUTHORIZED -> "&c这个 API Key 没过，八成是复制时漏了点啥。";
-                case RATE_LIMITED -> "&e查得有点猛，CNTier 让咱缓缓再来。";
-                case ERROR -> "&c接口这会儿不太配合：" + result.detail();
+                case NOT_FOUND -> "&eCNTier 中未收录该玩家。";
+                case API_KEY_MISSING -> "&cAPI Key 未配置，请检查 config.yml 或 CNTIER_API_KEY。";
+                case UNAUTHORIZED -> "&cAPI Key 验证失败，请检查配置。";
+                case RATE_LIMITED -> "&e请求过于频繁，请稍后重试。";
+                case ERROR -> "&c查询失败，请稍后重试。";
                 case AVAILABLE -> "";
             };
             tell(sender, message);
@@ -155,7 +161,7 @@ public final class CnTierCommand implements CommandExecutor, TabCompleter {
             + " &7| 黑名单：" + (profile.blacklisted() ? "&c是" : "&a否"));
 
         if (profile.tierRecords().isEmpty()) {
-            tell(sender, "&e人是找到了，但一个模式段位都没有，挺干净。");
+            tell(sender, "&e已找到玩家，但没有可显示的模式段位。");
             return;
         }
 

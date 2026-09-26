@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 class CnTierLiveTest {
 
     @Test
-    void 真实匿名总榜不用Key也能被插件完整吃下() throws Exception {
+    void 公开总榜无需Key即可返回玩家数据() throws Exception {
         assumeTrue(
             "true".equalsIgnoreCase(System.getenv("CNTIER_RUN_LIVE_TESTS")),
             "普通构建不碰公网；要联调就把 CNTIER_RUN_LIVE_TESTS 设成 true"
@@ -35,6 +35,6 @@ class CnTierLiveTest {
 
         assertEquals(ProfileStatus.AVAILABLE, result.status(), result.detail());
         assertEquals(UUID.fromString(testUuid), result.profile().uuid());
-        assertFalse(result.profile().tierRecords().isEmpty(), "抽到的测试玩家居然没段位，样本该换了");
+        assertFalse(result.profile().tierRecords().isEmpty(), "测试玩家没有段位记录，请更新测试样本");
     }
 }

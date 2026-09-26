@@ -47,23 +47,28 @@ public final class TierFormatter {
     }
 
     public String formatTag(TierRecord record) {
-        return apply(settings.tagFormat(), record, record.currentTier(), record.retired());
+        PluginSettings current = settings;
+        return apply(current, current.tagFormat(), record, record.currentTier(), record.retired());
     }
 
     public String formatHeadTag(TierRecord record) {
-        return apply(settings.headFormat(), record, record.currentTier(), record.retired());
+        PluginSettings current = settings;
+        return apply(current, current.headFormat(), record, record.currentTier(), record.retired());
     }
 
     public String formatFormatted(TierRecord record) {
-        return apply(settings.formattedFormat(), record, record.currentTier(), record.retired());
+        PluginSettings current = settings;
+        return apply(current, current.formattedFormat(), record, record.currentTier(), record.retired());
     }
 
     public String formatTier(TierRecord record) {
-        return apply(settings.tierFormat(), record, record.currentTier(), record.retired());
+        PluginSettings current = settings;
+        return apply(current, current.tierFormat(), record, record.currentTier(), record.retired());
     }
 
     public String formatPeak(TierRecord record) {
-        return apply(settings.peakFormat(), record, record.peakTier(), false);
+        PluginSettings current = settings;
+        return apply(current, current.peakFormat(), record, record.peakTier(), false);
     }
 
     public String color(TierLevel level) {
@@ -95,15 +100,20 @@ public final class TierFormatter {
         return GameMode.fromInput(configuredMode).flatMap(profile::tier);
     }
 
-    private String apply(String template, TierRecord record, TierLevel level, boolean retired) {
-        PluginSettings current = settings;
+    private String apply(
+        PluginSettings current,
+        String template,
+        TierRecord record,
+        TierLevel level,
+        boolean retired
+    ) {
         String output = replace(template, Map.of(
             "retired_color", retired ? colorToken(current.retiredColor()) : "",
             "retired", retired ? current.retiredMarker() : "",
-            "tier_color", colorToken(color(level)),
+            "tier_color", colorToken(current.tierColors().getOrDefault(level, "#FFFFFF")),
             "tier", level.code(),
-            "mode_color", colorToken(modeColor(record.mode())),
-            "mode_icon", modeIcon(record.mode()),
+            "mode_color", colorToken(current.modeColors().getOrDefault(record.mode(), "#FFFFFF")),
+            "mode_icon", current.modeIcons().getOrDefault(record.mode(), ""),
             "mode", record.mode().key(),
             "mode_name", record.mode().chineseName(),
             "icon", retired

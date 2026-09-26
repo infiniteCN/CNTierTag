@@ -8,7 +8,7 @@
     <artifactId>cntier-tag</artifactId>
     <version>1.0.0</version>
     <name>CNTierTag</name>
-    <description>把 CN Tierlist 段位塞进 Minecraft 标签和占位符</description>
+    <description>在 Minecraft 中显示 CN Tierlist 段位并提供占位符</description>
 
     <properties>
         <maven.compiler.release>21</maven.compiler.release>

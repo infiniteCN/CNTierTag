@@ -16,9 +16,9 @@ public final class PlaceholderIntegration {
     ) {
         CnTierExpansion expansion = new CnTierExpansion(plugin, service, formatter);
         if (expansion.register()) {
-            plugin.getLogger().info("PlaceholderAPI 认出 %cntier_*% 这套占位符了");
+            plugin.getLogger().info("[PlaceholderAPI] 已注册 %cntier_*% 占位符");
         } else {
-            plugin.getLogger().warning("PlaceholderAPI 死活没收下扩展，这很难评，看看它自己的日志吧");
+            plugin.getLogger().warning("[PlaceholderAPI] 占位符注册失败，请检查 PlaceholderAPI 日志");
         }
         return expansion::unregister;
     }

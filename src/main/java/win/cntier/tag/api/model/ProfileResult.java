@@ -9,7 +9,7 @@ public record ProfileResult(ProfileStatus status, PlayerProfile profile, String 
         Objects.requireNonNull(status, "status");
         detail = detail == null ? "" : detail;
         if (status == ProfileStatus.AVAILABLE && profile == null) {
-            throw new IllegalArgumentException("有数据状态不能塞个空玩家进来");
+            throw new IllegalArgumentException("AVAILABLE 状态必须包含玩家数据");
         }
     }
 

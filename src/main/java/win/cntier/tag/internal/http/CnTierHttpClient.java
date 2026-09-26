@@ -35,10 +35,6 @@ public final class CnTierHttpClient {
         clearCache();
     }
 
-    public CompletableFuture<ProfileResult> fetch(UUID uuid, PluginSettings settings) {
-        return fetch(uuid, null, settings, false);
-    }
-
     public CompletableFuture<ProfileResult> fetch(
         UUID uuid,
         String playerName,
@@ -94,7 +90,7 @@ public final class CnTierHttpClient {
             } catch (IllegalArgumentException exception) {
                 return CompletableFuture.completedFuture(RankingLoadResult.failed(
                     ProfileStatus.ERROR,
-                    "匿名总榜地址写歪了：" + exception.getMessage()
+                    "总榜地址无效：" + exception.getMessage()
                 ));
             }
 
@@ -104,7 +100,7 @@ public final class CnTierHttpClient {
                 .thenApply(this::mapRankingResponse)
                 .exceptionally(throwable -> RankingLoadResult.failed(
                     ProfileStatus.ERROR,
-                    "拉 CNTier 匿名总榜时翻车了：" + usefulMessage(throwable)
+                    "总榜请求失败：" + usefulMessage(throwable)
                 ));
             rankingInFlight = future;
             future.whenComplete((result, throwable) -> {
@@ -138,26 +134,26 @@ public final class CnTierHttpClient {
             .map(ProfileResult::available)
             .orElseGet(() -> ProfileResult.of(
                 ProfileStatus.NOT_FOUND,
-                "CNTier 匿名总榜里没这名玩家"
+                "总榜中未找到该玩家"
             ));
     }
 
     private RankingLoadResult mapRankingResponse(HttpResponse<byte[]> response) {
         int status = response.statusCode();
         if (status == 429) {
-            return RankingLoadResult.failed(ProfileStatus.RATE_LIMITED, "CNTier 让咱查慢点，先缓缓");
+            return RankingLoadResult.failed(ProfileStatus.RATE_LIMITED, "请求过于频繁，服务端返回 HTTP 429");
         }
         if (status == 401 || status == 403) {
-            return RankingLoadResult.failed(ProfileStatus.UNAUTHORIZED, "匿名总榜居然拒绝访问了，接口规则可能变了");
+            return RankingLoadResult.failed(ProfileStatus.UNAUTHORIZED, "总榜拒绝访问，HTTP " + status);
         }
         if (status < 200 || status >= 300) {
-            return RankingLoadResult.failed(ProfileStatus.ERROR, "CNTier 匿名总榜回了 HTTP " + status);
+            return RankingLoadResult.failed(ProfileStatus.ERROR, "总榜返回 HTTP " + status);
         }
 
         try {
             return RankingLoadResult.available(OverallRankingParser.parse(responseBody(response)));
         } catch (RuntimeException exception) {
-            return RankingLoadResult.failed(ProfileStatus.ERROR, "匿名总榜 JSON 没看懂：" + usefulMessage(exception));
+            return RankingLoadResult.failed(ProfileStatus.ERROR, "总榜响应解析失败：" + usefulMessage(exception));
         }
     }
 
@@ -176,7 +172,7 @@ public final class CnTierHttpClient {
                 .build();
         } catch (IllegalArgumentException exception) {
             return CompletableFuture.completedFuture(
-                ProfileResult.of(ProfileStatus.ERROR, "API 地址写歪了：" + exception.getMessage())
+                ProfileResult.of(ProfileStatus.ERROR, "API 地址无效：" + exception.getMessage())
             );
         }
 
@@ -184,33 +180,33 @@ public final class CnTierHttpClient {
             .thenApply(response -> mapResponse(uuid, response))
             .exceptionally(throwable -> ProfileResult.of(
                 ProfileStatus.ERROR,
-                "连 CNTier 时翻车了：" + usefulMessage(throwable)
+                "玩家接口请求失败：" + usefulMessage(throwable)
             ));
     }
 
     private ProfileResult mapResponse(UUID expectedUuid, HttpResponse<byte[]> response) {
         int status = response.statusCode();
         if (status == 404) {
-            return ProfileResult.of(ProfileStatus.NOT_FOUND, "CNTier 里没这个 UUID");
+            return ProfileResult.of(ProfileStatus.NOT_FOUND, "玩家接口中未找到该 UUID");
         }
         if (status == 401 || status == 403) {
-            return ProfileResult.of(ProfileStatus.UNAUTHORIZED, "API Key 没过验证，看看是不是抄错了");
+            return ProfileResult.of(ProfileStatus.UNAUTHORIZED, "API Key 验证失败");
         }
         if (status == 429) {
-            return ProfileResult.of(ProfileStatus.RATE_LIMITED, "CNTier 说查太勤了，先缓缓");
+            return ProfileResult.of(ProfileStatus.RATE_LIMITED, "请求过于频繁，服务端返回 HTTP 429");
         }
         if (status < 200 || status >= 300) {
-            return ProfileResult.of(ProfileStatus.ERROR, "CNTier 回了 HTTP " + status);
+            return ProfileResult.of(ProfileStatus.ERROR, "玩家接口返回 HTTP " + status);
         }
 
         try {
             var profile = ProfileParser.parse(responseBody(response));
             if (!profile.uuid().equals(expectedUuid)) {
-                return ProfileResult.of(ProfileStatus.ERROR, "接口回来的 UUID 对不上，怪吓人的，先不用这份数据");
+                return ProfileResult.of(ProfileStatus.ERROR, "玩家接口返回的 UUID 与请求不一致");
             }
             return ProfileResult.available(profile);
         } catch (RuntimeException exception) {
-            return ProfileResult.of(ProfileStatus.ERROR, "接口 JSON 没看懂：" + usefulMessage(exception));
+            return ProfileResult.of(ProfileStatus.ERROR, "玩家响应解析失败：" + usefulMessage(exception));
         }
     }
 

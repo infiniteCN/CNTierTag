@@ -16,7 +16,7 @@ class OverallRankingParserTest {
     private static final UUID ONLINE_UUID = UUID.fromString("fce48c86-3519-463c-ae0f-1fabb39fc280");
 
     @Test
-    void 匿名总榜的普通退役和巅峰格式都能认() {
+    void 可以解析普通退役和巅峰格式() {
         var ranking = OverallRankingParser.parse("""
             [
               {
@@ -47,7 +47,7 @@ class OverallRankingParserTest {
     }
 
     @Test
-    void 离线服UUID对不上时还能按名字兜底() {
+    void UUID不匹配时按玩家名查找() {
         var ranking = OverallRankingParser.parse("""
             [{"uuid":"%s","name":"Axelili","region":"华东","modeTiers":{"Sword":"HT3"}}]
             """.formatted(ONLINE_UUID));
@@ -60,7 +60,7 @@ class OverallRankingParserTest {
     }
 
     @Test
-    void 坏玩家和不认识的段位不会拖垮整份榜() {
+    void 无效玩家和未知段位不会中断总榜解析() {
         var ranking = OverallRankingParser.parse("""
             [
               {"uuid":"这不是UUID","name":"坏样本","modeTiers":{"Sword":"HT1"}},

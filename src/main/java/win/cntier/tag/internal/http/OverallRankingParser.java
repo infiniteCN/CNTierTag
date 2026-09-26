@@ -27,7 +27,7 @@ public final class OverallRankingParser {
     public static RankingIndex parse(String body) {
         JsonElement root = JsonParser.parseString(body);
         if (!root.isJsonArray()) {
-            throw new IllegalArgumentException("匿名总榜回来的不是玩家数组，这接口今天有点抽象");
+            throw new IllegalArgumentException("总榜响应必须是玩家数组");
         }
 
         Map<UUID, PlayerProfile> byUuid = new HashMap<>();
@@ -45,7 +45,7 @@ public final class OverallRankingParser {
         }
 
         if (byUuid.isEmpty()) {
-            throw new IllegalArgumentException("匿名总榜一名能认的玩家都没有，先别拿空榜把全服称号冲掉");
+            throw new IllegalArgumentException("总榜中没有可解析的玩家数据");
         }
         return new RankingIndex(byUuid, byName);
     }

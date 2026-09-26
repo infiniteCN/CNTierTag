@@ -24,7 +24,7 @@ class PlaceholderResolverTest {
         new PlaceholderResolver(new TierFormatter(PluginSettings.defaults()));
 
     @Test
-    void 模式别名和修饰符都能解() {
+    void 可以解析模式别名和占位符修饰符() {
         PlayerProfile profile = profile();
         assertEquals("(R) LT2", resolver.resolve(profile, "tier_uhc_raw"));
         assertEquals("HT1", resolver.resolve(profile, "peak_buhc_raw"));
@@ -33,7 +33,7 @@ class PlaceholderResolverTest {
     }
 
     @Test
-    void 玩家字段按中文语境返回() {
+    void 玩家字段返回中文值() {
         PlayerProfile profile = profile();
         assertEquals("华东", resolver.resolve(profile, "region"));
         assertEquals("是", resolver.resolve(profile, "blacklisted"));
@@ -43,7 +43,7 @@ class PlaceholderResolverTest {
     }
 
     @Test
-    void 最佳模式不会挑退役HT1压过现役HT2() {
+    void 最佳模式优先选择未退役记录() {
         PlayerProfile profile = profile();
         assertEquals("sword", resolver.resolve(profile, "best_mode"));
         assertEquals("剑", resolver.resolve(profile, "best_mode_name"));
@@ -52,14 +52,14 @@ class PlaceholderResolverTest {
     }
 
     @Test
-    void 不存在和乱写的参数分得清() {
+    void 区分缺失数据和未知参数() {
         assertEquals("", resolver.resolve(profile(), "tier_mace_raw"));
         assertNull(resolver.resolve(profile(), "tier_bedwars_raw"));
-        assertNull(resolver.resolve(profile(), "啥玩意"));
+        assertNull(resolver.resolve(profile(), "unknown_parameter"));
     }
 
     @Test
-    void 三种选段规则按参考模组的逻辑走() {
+    void 三种选段规则返回对应模式() {
         PlayerProfile profile = profile();
 
         assertEquals("buhc", resolver("buhc", "selected_only").resolve(profile, "mode"));
@@ -69,7 +69,7 @@ class PlaceholderResolverTest {
     }
 
     @Test
-    void 模式图标颜色既能进格式也能单独拿() {
+    void 模式图标和颜色支持格式化及单独读取() {
         YamlConfiguration config = new YamlConfiguration();
         config.set("default-mode", "sword");
         config.set("display-rule", "selected_only");

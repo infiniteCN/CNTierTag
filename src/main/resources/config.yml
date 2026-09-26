@@ -1,27 +1,26 @@
-# 默认跟 CnTierTagger 一样拉匿名总榜，不填 Key 也能直接显示。
+# 默认读取公开总榜，不配置 Key 也能显示玩家段位。
 api:
   base-url: "https://cntier.win"
-  # 可选。匿名总榜抽风或没找到玩家时，填了才会拿旧版单玩家接口补查。
+  # 可选。公开总榜请求失败或未找到玩家时，配置后会尝试单玩家接口。
   key: ""
-  # 总榜约 750 KB；跨境线路偶尔会超过 8 秒，给完整响应留出余量。
+  # 单次请求的超时时间，允许范围为 2～30 秒。
   timeout-seconds: 15
-# 真要配备用 Key，也能用 CNTIER_API_KEY 环境变量盖过上面的 key。
+# CNTIER_API_KEY 环境变量的优先级高于 api.key。
 
 cache:
-  # 整份总榜全服共用这份缓存，别让每个玩家都扛着 660KB 榜单回家。
+  # 总榜由全服共享；以下数值分别控制成功、未收录和失败结果的缓存时间。
   success-seconds: 300
   not-found-seconds: 60
   failure-seconds: 20
 
-# 默认直接挂到玩家头顶和 Tab，不需要再配任何占位符。
+# 直接显示不依赖 PlaceholderAPI。关闭 enabled 后仍可单独使用命令和占位符。
 direct-display:
   enabled: true
   nametag: true
   tab-list: true
-  # 每 2 秒同步一次，既能接住接口回包，也能补上刚进观察范围的玩家。
-  refresh-ticks: 40
+  # 检查缓存、显示内容和可见性的周期。默认 100 tick，即 5 秒。
+  refresh-ticks: 100
 
-# 参考 CnTierTagger 做了三种选段规则：
 # selected_only：只看 default-mode；highest_only：只看最高段位；
 # mixed：default-mode 有段位就用它，没有再退回最高段位。
 # default-mode 填 best 时，三种规则都会直接挑最高段位。
@@ -31,11 +30,11 @@ display-rule: "mixed"
 formats:
   # 可用变量：<tier> <tier_color> <icon> <retired> <retired_color>
   # 还有 <mode> <mode_name> <mode_icon> <mode_color>。
-  # head 是玩家头顶 Text Display 的称号部分，插件会在后面接上灰色竖线和玩家名。
-  head: "<mode_color><mode_icon> <tier_color><retired><tier>"
-  # tag 用在 Tab 和占位符里：模式色图标 + 段位 + 灰色竖线 + 玩家名。
-  tag: "<mode_color><mode_icon> <tier_color><retired><tier> &7| &r"
-  formatted: "<mode_color><mode_icon> <tier_color><retired><tier> &7|&r"
+  # head 是头顶称号部分，插件会在其后追加灰色分隔符和白色玩家名。
+  head: "<mode_color><mode_icon> <retired_color><retired><tier_color><tier>"
+  # tag 用作 Tab 前缀和默认标签占位符。
+  tag: "<mode_color><mode_icon> <retired_color><retired><tier_color><tier> &7| &r"
+  formatted: "<mode_color><mode_icon> <retired_color><retired><tier_color><tier> &7|&r"
   tier: "<retired_color><retired><tier_color><tier>&r"
   peak: "<tier_color><tier>&r"
   loading: ""
@@ -48,7 +47,7 @@ retired:
   color: "#A2D6FF"
   icon: ""
 
-# PvPCore 就是直接用这些原生 Unicode 图标，不发材质包，也不占私用字形。
+# 模式图标使用原生 Unicode 字符，不需要材质包。
 modes:
   axe:
     color: "#55FF55"

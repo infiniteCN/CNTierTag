@@ -17,7 +17,6 @@ import win.cntier.tag.internal.service.TierService;
 public final class CnTierTagPlugin extends JavaPlugin {
 
     private static volatile CnTierApi api;
-    private PluginSettings settings;
     private TierFormatter formatter;
     private TierService service;
     private DirectTagManager directTagManager;
@@ -27,10 +26,10 @@ public final class CnTierTagPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
-        settings = PluginSettings.from(getConfig());
-        formatter = new TierFormatter(settings);
-        CnTierHttpClient httpClient = new CnTierHttpClient(settings);
-        service = new TierService(this, httpClient, formatter, settings);
+        PluginSettings loadedSettings = PluginSettings.from(getConfig());
+        formatter = new TierFormatter(loadedSettings);
+        CnTierHttpClient httpClient = new CnTierHttpClient(loadedSettings);
+        service = new TierService(this, httpClient, formatter, loadedSettings);
         directTagManager = new DirectTagManager(
             this,
             service,
@@ -51,13 +50,7 @@ public final class CnTierTagPlugin extends JavaPlugin {
         registerPlaceholderApi();
         directTagManager.start();
 
-        getServer().getOnlinePlayers().forEach(player -> service.fetchProfile(
-            player.getUniqueId(),
-            player.getName(),
-            false
-        ));
-
-        getLogger().info("CNTierTag 开工了，匿名总榜、全服共享缓存和 UUID/名字匹配都接上了");
+        getLogger().info("[Startup] CNTierTag 已启用，玩家段位将通过共享缓存异步更新");
     }
 
     @Override
@@ -68,20 +61,20 @@ public final class CnTierTagPlugin extends JavaPlugin {
         placeholderCleanup.run();
         getServer().getServicesManager().unregisterAll(this);
         api = null;
-        getLogger().info("CNTierTag 收摊了，缓存也就跟着下班咯");
+        getLogger().info("[Shutdown] CNTierTag 已停用，显示实体和服务注册已清理");
     }
 
     public void reloadPluginConfig() {
         reloadConfig();
-        settings = PluginSettings.from(getConfig());
-        service.reload(settings);
+        PluginSettings loadedSettings = PluginSettings.from(getConfig());
+        service.reload(loadedSettings);
         directTagManager.reload(DirectDisplaySettings.from(getConfig()));
     }
 
     public static CnTierApi api() {
         CnTierApi current = api;
         if (current == null) {
-            throw new IllegalStateException("CNTierTag 还没启用，现在拿 API 当然拿不到");
+            throw new IllegalStateException("CNTierTag 尚未启用，开发者 API 当前不可用");
         }
         return current;
     }
@@ -89,7 +82,7 @@ public final class CnTierTagPlugin extends JavaPlugin {
     private void registerCommand() {
         PluginCommand command = getCommand("cntier");
         if (command == null) {
-            throw new IllegalStateException("plugin.yml 连 cntier 命令都丢了，这包打得有点抽象");
+            throw new IllegalStateException("plugin.yml 中缺少 cntier 命令定义");
         }
         CnTierCommand handler = new CnTierCommand(this, service, formatter);
         command.setExecutor(handler);
@@ -98,7 +91,7 @@ public final class CnTierTagPlugin extends JavaPlugin {
 
     private void registerPlaceholderApi() {
         if (getServer().getPluginManager().getPlugin("PlaceholderAPI") == null) {
-            getLogger().warning("没看到 PlaceholderAPI，/cntier 还能用，但标签占位符先歇菜");
+            getLogger().info("[PlaceholderAPI] 未安装 PlaceholderAPI，占位符功能不会启用");
             return;
         }
         placeholderCleanup = PlaceholderIntegration.register(this, service, formatter);

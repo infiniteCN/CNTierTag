@@ -16,24 +16,24 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 class PluginSettingsTest {
 
     @Test
-    void 环境变量里的密钥优先而且会去掉首尾空格() {
+    void 环境变量密钥优先并去除首尾空格() {
         assertEquals("env-key", PluginSettings.resolveApiKey("config-key", "  env-key  "));
     }
 
     @Test
-    void 环境变量没填时继续用配置文件() {
+    void 环境变量为空时使用配置文件密钥() {
         assertEquals("config-key", PluginSettings.resolveApiKey(" config-key ", " "));
     }
 
     @Test
-    void 显示规则兼容横杠下划线和乱写回退() {
+    void 显示规则兼容横线下划线并为未知值提供默认项() {
         assertEquals(TagDisplayRule.SELECTED_ONLY, TagDisplayRule.parse("selected-only"));
         assertEquals(TagDisplayRule.HIGHEST_ONLY, TagDisplayRule.parse("highest_only"));
-        assertEquals(TagDisplayRule.MIXED, TagDisplayRule.parse("这啥啊"));
+        assertEquals(TagDisplayRule.MIXED, TagDisplayRule.parse("unknown"));
     }
 
     @Test
-    void 发布配置里的PvPCore原生图标真能被Yaml读出来() throws IOException {
+    void 发布配置里的Unicode模式图标可以被Yaml读取() throws IOException {
         InputStream input = PluginSettingsTest.class.getClassLoader()
             .getResourceAsStream("config.yml");
         assertNotNull(input);
@@ -52,8 +52,8 @@ class PluginSettingsTest {
             assertEquals("⚗", plugin.modeIcons().get(GameMode.POTION));
             assertEquals("🛡", plugin.modeIcons().get(GameMode.SMP));
             assertEquals("🔨", plugin.modeIcons().get(GameMode.MACE));
-            assertEquals("<mode_color><mode_icon> <tier_color><retired><tier>", plugin.headFormat());
-            assertEquals("<mode_color><mode_icon> <tier_color><retired><tier> &7| &r", plugin.tagFormat());
+            assertEquals("<mode_color><mode_icon> <retired_color><retired><tier_color><tier>", plugin.headFormat());
+            assertEquals("<mode_color><mode_icon> <retired_color><retired><tier_color><tier> &7| &r", plugin.tagFormat());
             assertFalse(plugin.hasApiKey());
         }
     }
